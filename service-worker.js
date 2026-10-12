@@ -5,7 +5,13 @@
    - Google Drive API / accounts.google.com: 캐시 안 함 (항상 최신 필요)
    ===================================================== */
 
-const CACHE_NAME = 'dormitory-journal-v16';
+const CACHE_NAME = 'pwa-worklog-han-v1';
+/* 이 앱 캐시 판정 — 같은 주소의 다른 기숙사 앱 캐시는 지우지 않는다(원본 규칙: ROSA scripts/dorm-pwa) */
+const OWN_PREFIXES = ['pwa-worklog-han-v', 'dormitory-journal-v'];
+function isOwnCache(key) {
+  if (key === CACHE_NAME) return false;
+  return OWN_PREFIXES.some(p => key.startsWith(p) && /^[0-9]/.test(key.slice(p.length)));
+}
 
 /* 설치 시 미리 캐시할 리소스 목록 */
 const PRECACHE = [
@@ -47,7 +53,7 @@ self.addEventListener('activate', event => {
     caches.keys().then(keys =>
       Promise.all(
         keys
-          .filter(k => k !== CACHE_NAME)
+          .filter(isOwnCache)
           .map(k => {
             console.log('이전 캐시 삭제:', k);
             return caches.delete(k);
