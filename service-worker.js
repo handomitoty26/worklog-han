@@ -5,7 +5,7 @@
    - Google Drive API / accounts.google.com: 캐시 안 함 (항상 최신 필요)
    ===================================================== */
 
-const CACHE_NAME = 'pwa-worklog-han-v1';
+const CACHE_NAME = 'pwa-worklog-han-v2';
 /* 이 앱 캐시 판정 — 같은 주소의 다른 기숙사 앱 캐시는 지우지 않는다(원본 규칙: ROSA scripts/dorm-pwa) */
 const OWN_PREFIXES = ['pwa-worklog-han-v', 'dormitory-journal-v'];
 function isOwnCache(key) {
