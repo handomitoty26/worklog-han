@@ -391,7 +391,7 @@
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', function() {
-          navigator.serviceWorker.register('sw.js')
+          navigator.serviceWorker.register('service-worker.js') // 실제 파일 이름(예전 'sw.js'는 없는 파일이라 등록이 늘 실패해 오프라인 저장이 꺼져 있었다, 2026-11-04)
             .then(function(reg) { console.log('SW registered'); })
             .catch(function(err) { console.log('SW error', err); });
         });
