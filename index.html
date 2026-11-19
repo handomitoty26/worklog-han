@@ -939,41 +939,53 @@
 <script>
 const DEFAULT_ROSTER_RAW = [];
 
-/* ===== 상벌점 항목 (상벌점항목.hwp 기준) ===== */
+/* ===== 상벌점 항목 (온웨이에듀 "상벌점 기준설정"과 같게 — 2026-11-19 기준 41개) =====
+   이름·점수는 온웨이에듀 그대로(점수는 기준점수), g는 관리일지 묶음(찾기 쉽게), og는 온웨이에듀 분류, ono는 온웨이에듀 번호(나중 자동 입력용) */
 const DEFAULT_CATS = {
   demerit:[
-    {g:"생활", name:"생활실 정리정돈 불량", pt:1},
-    {g:"생활", name:"용의 복장규정 위반", pt:1},
-    {g:"생활", name:"기숙사 출입 규정 위반", pt:1},
-    {g:"생활", name:"생활관 내 외부 음식물 반입", pt:3},
-    {g:"생활", name:"타인에게 피해를 주는 행동", pt:3},
-    {g:"생활", name:"시설물 고의적 훼손·용도 변경", pt:4},
-    {g:"점호·귀가", name:"점호 지각", pt:2},
-    {g:"점호·귀가", name:"아침 점호 불참", pt:4},
-    {g:"점호·귀가", name:"귀가·퇴사 신고서 미제출", pt:3},
-    {g:"점호·귀가", name:"무단 귀가", pt:6},
-    {g:"점호·귀가", name:"무단 외출", pt:4},
-    {g:"취침", name:"취침 규정 위반", pt:3},
-    {g:"취침", name:"취침 중 소란행위·타방 이동", pt:3},
-    {g:"전자기기", name:"전자기기 소지·사용 규정 위반", pt:4},
-    {g:"전자기기", name:"자습실 내 전자기기 사용규정 위반", pt:4},
-    {g:"전자기기", name:"핸드폰 미제출", pt:3},
-    {g:"자습실", name:"자습실 입실 시간 미준수", pt:1},
-    {g:"자습실", name:"자습실 내 무단 이동", pt:1},
-    {g:"자습실", name:"자습실 내 소란 행위", pt:2},
-    {g:"자습실", name:"자습실 내 음식물 반입", pt:2},
-    {g:"자습실", name:"자습실 책상·주변정리 불량", pt:1},
-    {g:"자습실", name:"자습실 정숙지도 불이행", pt:2},
-    {g:"기타", name:"교내 활동 미신고", pt:3},
-    {g:"기타", name:"지시 불이행1", pt:1},
-    {g:"기타", name:"지시 불이행2", pt:2}
+    {g:"생활", name:"생활실 정리정돈 불량, 미소등", pt:1, og:"생활실", ono:7},
+    {g:"생활", name:"용의복장 규정 위반(실외화 출입, 아침점호시 잠옷, 호실 외 탈의 등)", pt:1, og:"생활실", ono:8},
+    {g:"생활", name:"기숙사 출입 규정 위반(일과중 출입, 퇴실시간 미준수)", pt:1, og:"생활실", ono:9},
+    {g:"생활", name:"외부 음식물 반입", pt:3, og:"생활실", ono:11},
+    {g:"생활", name:"생활실 내 음식물 반입 및 취식", pt:4, og:"생활실", ono:34},
+    {g:"생활", name:"기타 타인에게 피해를 주는 행동", pt:3, og:"생활실", ono:13},
+    {g:"생활", name:"시설물 고의적 훼손 및 용도 변경", pt:4, og:"생활실", ono:17},
+    {g:"생활", name:"점심시간 실내화 미착용", pt:1, og:"식당", ono:35},
+    {g:"점호·귀가", name:"아침점호 지각", pt:1, og:"생활실", ono:10},
+    {g:"점호·귀가", name:"아침점호 불참", pt:3, og:"생활실", ono:16},
+    {g:"점호·귀가", name:"저녁 점호 지각(점호 5분전 이동금지)", pt:2, og:"생활실", ono:31},
+    {g:"점호·귀가", name:"귀가 및 퇴사 신고서 미제출", pt:3, og:"생활실", ono:15},
+    {g:"점호·귀가", name:"무단 귀가", pt:6, og:"생활실", ono:18},
+    {g:"점호·귀가", name:"무단 외출", pt:4, og:"생활실", ono:29},
+    {g:"점호·귀가", name:"신고서 없이 무단 이석", pt:3, og:"생활실", ono:26},
+    {g:"취침", name:"취침 규정 위반(미소등, 점호후1시간 화장실 이용금지)", pt:3, og:"생활실", ono:14},
+    {g:"취침", name:"취침 시간 중 소란행위 및 타방 이동", pt:3, og:"생활실", ono:30},
+    {g:"전자기기", name:"전자기기 소지 및 사용규정 위반(핸드폰)", pt:4, og:"생활실", ono:37},
+    {g:"전자기기", name:"전자기기 소지 및 사용규정 위반(태블릿)", pt:4, og:"생활실", ono:38},
+    {g:"전자기기", name:"전자기기 소지 및 사용규정 위반(노트북)", pt:4, og:"생활실", ono:39},
+    {g:"전자기기", name:"전자기기 소지 및 사용규정 위반(랜턴 및 전열기구)", pt:4, og:"생활실", ono:12},
+    {g:"전자기기", name:"전자기기 미제출(핸드폰)", pt:3, og:"생활실", ono:32},
+    {g:"전자기기", name:"전자기기 미제출(태블릿)", pt:3, og:"생활실", ono:40},
+    {g:"전자기기", name:"전자기기 미제출(노트북)", pt:3, og:"생활실", ono:41},
+    {g:"자습실", name:"자습실 입실시각 미준수(자습시작 2분전 착석)", pt:1, og:"생활실", ono:19},
+    {g:"자습실", name:"무단 이동", pt:1, og:"생활실", ono:20},
+    {g:"자습실", name:"자습실 내 소란행위", pt:2, og:"생활실", ono:21},
+    {g:"자습실", name:"자습실 내 음식물 반입", pt:2, og:"생활실", ono:22},
+    {g:"자습실", name:"자습실 책상 및 주변 정리 불량", pt:1, og:"생활실", ono:23},
+    {g:"자습실", name:"자습실 감독교사 및 사감교사의 정숙지도 불이행", pt:2, og:"생활실", ono:24},
+    {g:"자습실", name:"자습실 내 전자기기 사용 규정 위반", pt:4, og:"생활실", ono:25},
+    {g:"기타", name:"지시 불이행 1", pt:1, og:"생활실", ono:27},
+    {g:"기타", name:"지시 불이행 2", pt:2, og:"생활실", ono:28}
   ],
   merit:[
-    {g:"상점", name:"방정리 양호", pt:1},
-    {g:"상점", name:"봉사 활동", pt:1},
-    {g:"상점", name:"캠페인 참여 등", pt:1},
-    {g:"상점", name:"단체활동 참여", pt:3},
-    {g:"상점", name:"단체활동 참여 우수", pt:5}
+    {g:"상점", name:"방정리 우수 호실(2주)", pt:3, og:"정리정돈", ono:1},
+    {g:"상점", name:"봉사활동(청소)", pt:1, og:"봉사활동", ono:2},
+    {g:"상점", name:"캠페인활동", pt:1, og:"봉사활동", ono:36},
+    {g:"상점", name:"기타", pt:1, og:"기타", ono:3},
+    {g:"상점", name:"기타(공모전 당선 등)", pt:1, og:"기타", ono:4},
+    {g:"상점", name:"기타(단체활동 참여)", pt:3, og:"기타", ono:5},
+    {g:"상점", name:"기타(단체활동 참여 우수)", pt:5, og:"기타", ono:6},
+    {g:"상점", name:"기타(필요 활동 사항 수행)", pt:2, og:"기타", ono:33}
   ]
 };
 
@@ -1029,7 +1041,7 @@ let DB=loadData();
 function loadData(){
   try{const d=JSON.parse(localStorage.getItem(DATA_KEY)); if(d&&d.contacts) return migrate(d);}catch(e){}
   return {title:"기숙사 관리일지", contacts:{}, demerits:[], counsels:[], journal:[],
-          cats:JSON.parse(JSON.stringify(DEFAULT_CATS)), settings:{supervisor:""}, homeleave:null, acad:{}, memos:[], todos:{}};
+          cats:JSON.parse(JSON.stringify(DEFAULT_CATS)), settings:{supervisor:""}, homeleave:null, acad:{}, memos:[], todos:{}, _catFix2:true};
 }
 function migrate(d){
   d.contacts=d.contacts||{}; d.demerits=d.demerits||[]; d.counsels=d.counsels||[];
@@ -1042,6 +1054,13 @@ function migrate(d){
       if(c.name==="교내 활동 미신고"&&c.pt===2)c.pt=3;
     });
     d._catFix1=true;
+  }
+  // 2026-11-19: 항목을 온웨이에듀 기준설정과 같게 한 번 통째로 바꾼다 — 예전 목록(직접 고친 것 포함)은 catsPrev에 두고 항목 편집의 [이전 항목 목록과 바꾸기]로 오갈 수 있다.
+  // 예전 상벌점 기록은 그때 이름·점수 그대로 남는다. 옛 백업을 복원해도 이 길을 거친다.
+  if(!d._catFix2){
+    d.catsPrev=JSON.parse(JSON.stringify(d.cats||DEFAULT_CATS));
+    d.cats=JSON.parse(JSON.stringify(DEFAULT_CATS));
+    d._catFix2=true;
   }
   return d;
 }
@@ -2497,8 +2516,12 @@ function renderCatEditor(){
       <input style="width:62px" value="${esc(c.g)}" data-t="${t}" data-i="${i}" data-k="g">
       <button class="x" style="width:30px;height:30px;font-size:14px" onclick="rmCat('${t}',${i})">✕</button></div>`;});
     s+=`<button class="fchip" style="margin-top:2px" onclick="addCat('${t}')">＋ ${t==="demerit"?"벌점":"상점"} 항목 추가</button>`;return s;};
-  box.innerHTML=block("demerit","🔻 벌점 항목")+`<div style="height:10px"></div>`+block("merit","🔺 상점 항목");
+  box.innerHTML=block("demerit","🔻 벌점 항목")+`<div style="height:10px"></div>`+block("merit","🔺 상점 항목")
+    +(DB.catsPrev?`<button class="fchip" style="margin-top:10px" onclick="swapCats()">↺ 이전 항목 목록과 바꾸기</button>`:"");
 }
+function swapCats(){if(!DB.catsPrev)return;
+  if(!confirm("지금 항목 목록과 이전 항목 목록을 서로 바꿀까요?\n(한 번 더 누르면 다시 돌아옵니다. 이미 남긴 상벌점 기록은 바뀌지 않습니다)"))return;
+  const cur=DB.cats;DB.cats=DB.catsPrev;DB.catsPrev=cur;save();renderCatEditor();toast("항목 목록을 바꿨습니다");}
 function addCat(t){DB.cats[t].push({g:"기타",name:"새 항목",pt:1});renderCatEditor();}
 function rmCat(t,i){DB.cats[t].splice(i,1);renderCatEditor();}
 function saveCats(){document.querySelectorAll("#cat-editor input").forEach(inp=>{
