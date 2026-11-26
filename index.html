@@ -785,6 +785,7 @@
           <div class="field" style="margin:0"><label>시각</label><input type="time" id="jr-time"></div>
           <div class="field" style="margin:0"><label>작성자</label><input id="jr-by" placeholder="근무 사감"></div>
         </div>
+        <div id="ho-share-slot"></div>
         <div class="row2">
           <button class="btn btn-s" onclick="toggleAddJr()">취소</button>
           <button class="btn btn-g" onclick="addJournal()">기록 추가</button>
@@ -880,6 +881,8 @@
         </label>
       </div>
 
+      <div id="ho-settings"></div>
+
       <div class="sec-t">💾 연동 파일 저장 상태</div>
       <div class="hint">사진·연락처·특이사항은 이 기기에 자동 저장되어, 앱을 껐다 켜도 그대로 유지됩니다. 새로 불러오기 전까지 다시 연동할 필요가 없습니다.</div>
       <div class="hint" id="save-status">계산 중...</div>
@@ -935,7 +938,7 @@
 
 <div id="toast"></div>
 
-
+<script src="handover.js?v=1"></script>
 <script>
 const DEFAULT_ROSTER_RAW = [];
 
@@ -1064,7 +1067,10 @@ function migrate(d){
   }
   return d;
 }
-function save(){ try{localStorage.setItem(DATA_KEY,JSON.stringify(DB));}catch(e){toast("저장 공간 부족 — 백업 후 정리하세요");} }
+function save(){ try{localStorage.setItem(DATA_KEY,JSON.stringify(DB));return true;}catch(e){
+  // 공간이 모자라면 인계함이 받아 둔 목록(다시 받을 수 있음)을 비우고 한 번 더 — 일지 저장이 먼저
+  try{if(window.Handover&&Handover.version===1&&typeof Handover.freeSpace==="function"&&Handover.freeSpace()){localStorage.setItem(DATA_KEY,JSON.stringify(DB));return true;}}catch(e2){}
+  toast("저장 공간 부족 — 백업 후 정리하세요");return false;} }
 
 /* ===== 사진 IndexedDB ===== */
 let _idb=null;
@@ -1580,21 +1586,27 @@ function toggleAddJr(){const p=document.getElementById("jr-add-panel");p.classLi
   if(p.classList.contains("show")){document.getElementById("jr-by").value=document.getElementById("jr-by").value||sup();}}
 function addJournal(){const body=document.getElementById("jr-body").value.trim();
   if(!body){toast("내용을 입력하세요");return;}
-  DB.journal.unshift({id:uid(),kind:document.getElementById("jr-kind").value,body,
+  const rec={id:uid(),kind:document.getElementById("jr-kind").value,body,
     date:document.getElementById("jr-date").value||todayStr(),time:document.getElementById("jr-time").value||nowTime(),
-    by:document.getElementById("jr-by").value.trim()});
-  save(); document.getElementById("jr-body").value="";
+    by:document.getElementById("jr-by").value.trim()};
+  // 인계 공유(handover.js) — 공유 체크가 켜져 있으면 추가 전에 검사, 못 불러왔거나 오류면 공유 없이 지금처럼
+  let ho=null; try{if(window.Handover&&Handover.version===1)ho=Handover.beforeAdd(rec);}catch(e){ho=null;}
+  if(ho&&ho.block){alert(ho.msg);return;}
+  DB.journal.unshift(rec);
+  const ok=save(); document.getElementById("jr-body").value="";
   document.getElementById("jr-add-panel").classList.remove("show");
-  renderJournal(); toast("일지 기록 추가됨");}
+  renderJournal(); toast("일지 기록 추가됨");
+  if(ho&&ho.share){if(ok){try{Promise.resolve(Handover.share(rec)).catch(()=>{});}catch(e){}}else toast("일지 저장 실패 — 공유 안 함");}}
 function renderJournal(){
   const d=document.getElementById("jr-date").value;
   const arr=DB.journal.filter(r=>r.date===d).sort((a,b)=>(a.time||"").localeCompare(b.time||""));
   const box=document.getElementById("jr-list");
-  box.innerHTML=arr.length?arr.map(r=>`<div class="log-item">
+  box.innerHTML=arr.length?arr.map(r=>`<div class="log-item" data-id="${esc(r.id)}">
     <div class="top"><span><span class="ltag lt-inc">${esc(r.kind)}</span> <span class="when">${esc(r.time||"")}</span></span>
     <button class="log-del" onclick="delJr('${r.id}')">🗑</button></div>
     <div class="body">${esc(r.body)}</div>${r.by?`<div class="by">작성: ${esc(r.by)}</div>`:""}</div>`).join("")
     :'<div class="empty">이 날짜의 일지 기록이 없습니다.</div>';
+  try{if(window.Handover&&Handover.version===1)Handover.decorate(box);}catch(e){}
   // 당일 상담 요약 (상벌점 제외)
   const cns=DB.counsels.filter(r=>r.date===d);
   const ds=document.getElementById("jr-daily");
@@ -1604,7 +1616,10 @@ function renderJournal(){
     h+=`<div class="dl"><span><b style="color:var(--purple)">${esc(r.kind||"상담")}</b> ${esc(s.name)} <span style="color:var(--sub);font-size:12px">${esc(r.hak)}</span></span><span></span></div>`;});
   h+="</div>"; ds.innerHTML=h;
 }
-function delJr(id){if(!confirm("이 일지 기록을 삭제할까요?"))return;DB.journal=DB.journal.filter(r=>r.id!==id);save();renderJournal();}
+function delJr(id){if(!confirm("이 일지 기록을 삭제할까요?"))return;
+  let wd=false; try{if(window.Handover&&Handover.version===1&&Handover.isShared(id))wd=confirm("공유한 인계도 취소할까요?");}catch(e){wd=false;}
+  DB.journal=DB.journal.filter(r=>r.id!==id);const ok=save();renderJournal();
+  if(wd&&ok){try{Promise.resolve(Handover.withdraw(id)).catch(()=>{});}catch(e){}}}
 
 /* ===== 달력 ===== */
 let calY,calM,calTarget="jr-date",calCb=null;
@@ -1668,6 +1683,7 @@ function openData(){
   document.getElementById("exp-to").value=todayStr();
   document.getElementById("exp-from").value=addDays(todayStr(),-30);
   renderRosterStatus();renderLeaveStatus();renderSaveStatus();renderDriveStatus();
+  try{if(window.Handover&&Handover.version===1)Handover.renderSettings();}catch(e){}
   document.getElementById("cat-editor-wrap").style.display="none";
   document.getElementById("leave-clear-btn").style.display=(DB.homeleave&&DB.homeleave.map)?"block":"none";
   showOv("ov-data");
@@ -2556,6 +2572,7 @@ function exportXlsx(){
 loadRoster();
 render();
 setTimeout(checkTodoNotify, 800);
+try{if(window.Handover&&Handover.version===1)Handover.start();}catch(e){}
 // 앱 켤 때 자동 드라이브 백업 (인터넷·이전 인증 있을 때만 조용히)
 // 구글 모듈이 준비되는 즉시(0.1초 간격 확인, 시작 기준 10초 마감) 백업 — 앱이 뜬 직후 한 번 깜빡이고 끝나게(예전 1.5초 기다림 없앰, 2026-11-04)
 (function autoDriveBackup(){

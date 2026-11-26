@@ -1,0 +1,8 @@
+{
+  "name": "worklog-han-tests",
+  "private": true,
+  "description": "시험 전용(빌드 없음) — 인계 공유 서버·클라이언트 시험",
+  "scripts": {
+    "test": "node --test \"tests/*.test.mjs\""
+  }
+}
