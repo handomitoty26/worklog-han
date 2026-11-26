@@ -96,7 +96,8 @@ class FakeRange {
 }
 
 class FakeSpreadsheet {
-  constructor(opt) { this.sheets = new Map(); this.tz = null; this.opt = opt; }
+  constructor(opt) { this.sheets = new Map(); this.tz = null; this.opt = opt; this.id = "test-sheet-id-not-real"; }
+  getId() { return this.id; }
   getSheetByName(n) { return this.sheets.get(n) ?? null; }
   insertSheet(n) {
     if (this.sheets.has(n)) throw new Error("이미 있는 시트");
@@ -115,10 +116,26 @@ export function makeServer(opt = {}) {
   const triggers = [];
   const logs = [], errors = [];
   let flushes = 0;
+  // 실행 흉내 — 편집기(editor)가 아니면 getActive를 위반으로 적고 오류를 던짐(doPost가 삼켜도 run이 시험을 실패시킴)
+  let mode = "editor", opens = 0;
+  const violations = [];
+  const ids = { script: "test-script-id-not-real" };
+  const active = name => () => {
+    if (mode !== "editor") {
+      violations.push(mode + ": " + name);
+      throw new Error("웹 앱·트리거에서는 " + name + "를 쓸 수 없습니다(가짜)");
+    }
+    return ss;
+  };
   const sandbox = {
     SpreadsheetApp: {
-      getActive: () => ss,
-      getActiveSpreadsheet: () => ss,
+      getActive: active("getActive"),
+      getActiveSpreadsheet: active("getActiveSpreadsheet"),
+      openById(id) {
+        opens++;
+        if (id === ss.id) return ss;
+        throw new Error("없는 시트입니다(가짜)");
+      },
       flush: () => { flushes++; },
       newDataValidation: () => {
         const rule = {};
@@ -164,10 +181,16 @@ export function makeServer(opt = {}) {
     PropertiesService: {
       getScriptProperties: () => ({
         getProperty: k => (props.has(k) ? props.get(k) : null),
-        setProperty(k, v) { props.set(k, String(v)); }
+        setProperty(k, v) { props.set(k, String(v)); },
+        // 실제처럼 두 번째 인자가 참일 때만 다른 속성을 모두 지움(기본은 합치기)
+        setProperties(obj, deleteAll) {
+          if (deleteAll) props.clear();
+          Object.keys(obj).forEach(k => props.set(k, String(obj[k])));
+        }
       })
     },
     ScriptApp: {
+      getScriptId: () => ids.script,
       getProjectTriggers: () => triggers.slice(),
       deleteTrigger(t) { const i = triggers.indexOf(t); if (i >= 0) triggers.splice(i, 1); },
       newTrigger(fn) {
@@ -187,17 +210,32 @@ export function makeServer(opt = {}) {
   const ctx = vm.createContext(sandbox);
   vm.runInContext(SRC, ctx, { filename: "handover-server.gs" });
   ctx.nowMs_ = () => clock.now;
+  // 모드는 finally로 반드시 풀고, 위반이 생겼으면 원래 결과와 상관없이 실패
+  const run = (m, fn) => {
+    const before = violations.length;
+    mode = m;
+    let out, err, threw = false;
+    try { out = fn(); } catch (e) { threw = true; err = e; } finally { mode = "editor"; }
+    if (violations.length > before) throw new Error("웹 앱·트리거 흉내에서 getActive를 불렀습니다: " + violations.slice(before).join(", "));
+    if (threw) throw err;
+    return out;
+  };
   const s = {
-    ctx, ss, clock, lock, props, triggers, logs, errors,
+    ctx, ss, clock, lock, props, triggers, logs, errors, ids, violations,
     get flushes() { return flushes; },
+    get opens() { return opens; },
     sheet: n => ss.getSheetByName(n),
     // 웹 앱에 POST를 보낸 것처럼 doPost를 부르고 JSON 응답을 돌려줌
     call(body) {
       const contents = typeof body === "string" ? body : JSON.stringify(body);
-      const out = ctx.doPost({ postData: { contents, type: "text/plain" } });
+      const out = run("web", () => ctx.doPost({ postData: { contents, type: "text/plain" } }));
       if (out.getMimeType() !== "JSON") throw new Error("응답 형식이 JSON이 아닙니다");
       return JSON.parse(out.getContent());
-    }
+    },
+    // 웹 앱 실행 흉내(doGet·날 것의 doPost)
+    web: fn => run("web", fn),
+    // 시간 트리거 실행 흉내
+    trigger: name => run("trigger", () => ctx[name]())
   };
   return s;
 }

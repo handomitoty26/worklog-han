@@ -39,6 +39,113 @@ test("setupSheets: 머리줄이 다르면 멈춤", () => {
   assert.throws(() => s.ctx.setupSheets(), /머리줄/);
 });
 
+// ── 시트 연결(웹 앱·트리거는 setupSheets가 적은 시트를 ID로 연다) ──────
+
+const FAKE_IDS = ["test-sheet-id-not-real", "test-script-id-not-real", "copy-script-id-not-real", "gone-sheet-id-not-real", "old-sheet-id-not-real", "old-script-id-not-real"];
+// 응답·로그·오류 기록·던진 오류 문구 어디에도 시트·스크립트 ID가 없어야 함
+function noIds(s, ...extra) {
+  const all = [...s.logs, ...s.errors, ...extra.map(x => (typeof x === "string" ? x : JSON.stringify(x)))].join("\n");
+  for (const id of FAKE_IDS) assert.ok(!all.includes(id), "ID가 새어 나감: " + id);
+}
+function thrownMessage(fn) {
+  try { fn(); } catch (e) { return e.message; }
+  assert.fail("오류가 나야 합니다");
+}
+
+test("setupSheets: 웹 앱이 열 시트·스크립트 ID를 적고, 다른 속성(maxStaffNo)은 그대로", () => {
+  const s = makeServer();
+  s.props.set("maxStaffNo", "5");
+  s.ctx.setupSheets();
+  s.ctx.setupSheets();
+  assert.equal(s.props.get("sheetId"), "test-sheet-id-not-real");
+  assert.equal(s.props.get("sheetScript"), "test-script-id-not-real");
+  assert.equal(s.props.get("maxStaffNo"), "5");
+  assert.equal(s.opens, 0, "setupSheets는 편집기에서 연 시트를 그대로 씀");
+  noIds(s);
+});
+
+test("setupSheets: 머리줄이 달라 멈추면 기존 연결은 그대로", () => {
+  const s = makeServer();
+  s.ctx.setupSheets();
+  s.props.set("sheetId", "old-sheet-id-not-real");
+  s.props.set("sheetScript", "old-script-id-not-real");
+  s.sheet("확인").put(1, ["다른 머리"]);
+  const msg = thrownMessage(() => s.ctx.setupSheets());
+  assert.match(msg, /머리줄/);
+  assert.equal(s.props.get("sheetId"), "old-sheet-id-not-real");
+  assert.equal(s.props.get("sheetScript"), "old-script-id-not-real");
+  noIds(s, msg);
+});
+
+test("시트 연결: setupSheets 전에는 어떤 시트도 열지 않음 — 요청은 server, 편집기 함수·트리거는 멈춤", () => {
+  const s = makeServer();
+  const r = s.call({ op: "list", code: "AAAA-AAAA-AAAA" });
+  assert.deepEqual(r, { ok: false, error: "server" });
+  assert.match(s.errors.at(-1), /doPost 실패: 시트 연결이 없습니다/);
+  const m1 = thrownMessage(() => s.ctx.issueCodes());
+  assert.match(m1, /시트 연결이 없습니다/);
+  const m2 = thrownMessage(() => s.trigger("cleanupOld"));
+  assert.match(m2, /시트 연결이 없습니다/);
+  assert.equal(s.opens, 0);
+  assert.equal(s.violations.length, 0);
+  noIds(s, r, m1, m2);
+});
+
+test("시트 연결: 연결 기록이 지워지면 요청이 시트를 열지 않고 server", () => {
+  const s = boot();
+  s.props.delete("sheetId");
+  const opens = s.opens, writes = s.sheet("인계").writes;
+  for (const [op, data] of [["list"], ["post", P()]]) {
+    const r = req(s, 0, op, data);
+    assert.deepEqual(r, { ok: false, error: "server" }, op);
+    assert.match(s.errors.at(-1), /시트 연결이 없습니다/, op);
+    noIds(s, r);
+  }
+  assert.equal(s.opens, opens);
+  assert.equal(s.sheet("인계").writes, writes);
+  assert.equal(s.violations.length, 0);
+});
+
+test("시트 연결: 스크립트 ID가 다르면(시트 복사본) 원래 시트를 열지 않음", () => {
+  const s = boot();
+  s.ids.script = "copy-script-id-not-real";
+  const opens = s.opens, writes = s.sheet("인계").writes;
+  const r = req(s, 0, "post", P());
+  assert.deepEqual(r, { ok: false, error: "server" });
+  assert.match(s.errors.at(-1), /시트 연결이 없습니다/);
+  const m1 = thrownMessage(() => s.ctx.issueCodes());
+  assert.match(m1, /시트 연결이 없습니다/);
+  const m2 = thrownMessage(() => s.trigger("cleanupOld"));
+  assert.match(m2, /시트 연결이 없습니다/);
+  assert.equal(s.opens, opens);
+  assert.equal(s.sheet("인계").writes, writes);
+  assert.equal(s.violations.length, 0);
+  noIds(s, r, m1, m2);
+});
+
+test("시트 연결: 적힌 시트를 못 열면 구글 오류 문구 대신 고정 문구만", () => {
+  const s = boot();
+  s.props.set("sheetId", "gone-sheet-id-not-real");
+  const r = req(s, 0, "list");
+  assert.deepEqual(r, { ok: false, error: "server" });
+  assert.match(s.errors.at(-1), /시트를 열지 못했습니다/);
+  const m = thrownMessage(() => s.ctx.issueCodes());
+  assert.match(m, /시트를 열지 못했습니다/);
+  assert.ok(![...s.errors, m].some(x => x.includes("(가짜)")), "구글이 정한 원래 오류 문구를 흘리지 않음");
+  noIds(s, r, m);
+});
+
+test("시트 연결: 정상 요청은 적힌 시트를 ID로 열고, 응답·기록에 ID가 없음", () => {
+  const s = boot();
+  const opens = s.opens;
+  const outs = [req(s, 0, "post", P()), req(s, 1, "ack", { id: "abc123def", kind: "ack" }), req(s, 1, "list"), req(s, 0, "withdraw", { id: "abc123def" })];
+  outs.forEach(r => assert.equal(r.ok, true));
+  s.trigger("cleanupOld");
+  assert.ok(s.opens > opens, "openById로 엶");
+  assert.equal(s.violations.length, 0);
+  noIds(s, ...outs);
+});
+
 // ── 코드 발급 ───────────────────────────────────────────────
 
 test("issueCodes: ID·코드·상태·만든 시각, 코드는 서로 다르고 기록에 안 남음", () => {
@@ -198,7 +305,7 @@ test("요청 모양: JSON 아님·배열·너무 큼·비어 있음·모르는 �
     assert.equal(r.error, "bad", raw.slice(0, 20));
     assert.equal(r.me, undefined);
   }
-  const noPost = JSON.parse(s.ctx.doPost({}).getContent());
+  const noPost = JSON.parse(s.web(() => s.ctx.doPost({})).getContent());
   assert.equal(noPost.error, "bad");
   for (const op of [undefined, "delete", "LIST", "constructor"]) {
     const r = s.call({ op, code });
@@ -217,7 +324,7 @@ test("서버 오류: 시트가 없으면 server만 돌려주고 기록에 남김
 
 test("doGet: 안내 글만", () => {
   const s = makeServer();
-  assert.match(s.ctx.doGet().getContent(), /인계 공유 서버/);
+  assert.match(s.web(() => s.ctx.doGet()).getContent(), /인계 공유 서버/);
 });
 
 // ── 인계 보내기 ─────────────────────────────────────────────
@@ -445,7 +552,7 @@ test("cleanupOld: 1년 지난 인계와 그 확인만 지움, 날짜 이상한 �
   s.sheet("확인").put(37, ["feb30at1", "S02", "이사감", "조치 완료", stamp(NOW - 400 * DAY), "메모"]);
   s.sheet("확인").put(38, ["nopar001", "S02", "이사감", "확인", stamp(NOW - 400 * DAY), ""]);
   s.sheet("확인").put(39, ["nopar002", "S02", "이사감", "확인", "모름", ""]);
-  s.ctx.cleanupOld();
+  s.trigger("cleanupOld");
   const hs = s.sheet("인계").rowsOf(10).map(r => r[0]);
   assert.equal(hs.filter(x => x.startsWith("old")).length, 0);
   assert.equal(hs.length, 33);
@@ -461,7 +568,7 @@ test("cleanupOld: 1년 지난 인계와 그 확인만 지움, 날짜 이상한 �
 test("cleanupOld: 한꺼번에 많이 지우면 멈추고, cleanupOldConfirm은 지움", () => {
   const s = boot();
   fillCleanup(s, 25, 5);
-  assert.throws(() => s.ctx.cleanupOld(), /cleanupOldConfirm/);
+  assert.throws(() => s.trigger("cleanupOld"), /cleanupOldConfirm/);
   assert.equal(s.sheet("인계").rowsOf(10).length, 30, "멈추면 하나도 안 지움");
   assert.equal(s.sheet("확인").rowsOf(6).length, 30);
   assert.equal(s.lock.held, s.lock.released);
@@ -473,14 +580,14 @@ test("cleanupOld: 한꺼번에 많이 지우면 멈추고, cleanupOldConfirm은 
 test("cleanupOld: 줄 수와 상관없이 10%를 넘으면 멈춤, 딱 10%는 지움", () => {
   const few = boot();
   fillCleanup(few, 20, 1);
-  assert.throws(() => few.ctx.cleanupOld(), /cleanupOldConfirm/);
+  assert.throws(() => few.trigger("cleanupOld"), /cleanupOldConfirm/);
   assert.equal(few.sheet("인계").rowsOf(10).length, 21);
   const over = boot();
   fillCleanup(over, 2, 17);
-  assert.throws(() => over.ctx.cleanupOld(), /너무 많습니다\(2\/19줄\)/);
+  assert.throws(() => over.trigger("cleanupOld"), /너무 많습니다\(2\/19줄\)/);
   const edge = boot();
   fillCleanup(edge, 1, 9);
-  edge.ctx.cleanupOld();
+  edge.trigger("cleanupOld");
   assert.equal(edge.sheet("인계").rowsOf(10).length, 9);
   assert.equal(edge.sheet("확인").rowsOf(6).length, 9);
 });
@@ -490,7 +597,7 @@ test("cleanupOldConfirm: 시트가 꽉 차 있고 전부 지울 때도 줄 처�
   const sh = s.sheet("인계");
   for (let i = 0; i < 5; i++) sh.put(i + 2, HO({ id: "full000" + i, at: stamp(NOW - 400 * DAY) }));
   assert.equal(sh.maxRows, sh.getLastRow());
-  assert.throws(() => s.ctx.cleanupOld(), /cleanupOldConfirm/);
+  assert.throws(() => s.trigger("cleanupOld"), /cleanupOldConfirm/);
   s.ctx.cleanupOldConfirm();
   assert.equal(sh.rowsOf(10).length, 0);
   assert.deepEqual(sh.cells[0].slice(0, 1), ["id"]);
@@ -500,7 +607,7 @@ test("cleanupOld: 잠금을 못 잡으면 멈춤", () => {
   const s = boot();
   fillCleanup(s, 2, 2);
   s.lock.ok = false;
-  assert.throws(() => s.ctx.cleanupOld(), /다른 작업 중/);
+  assert.throws(() => s.trigger("cleanupOld"), /다른 작업 중/);
   assert.equal(s.sheet("인계").rowsOf(10).length, 4);
 });
 

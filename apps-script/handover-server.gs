@@ -1,5 +1,4 @@
 // 관리일지 인계 공유(인계함) 서버 — 사감실 전용 계정 시트에 붙여 쓰는 Apps Script 웹 앱
-/** @OnlyCurrentDoc */
 
 // 규칙(설계서 review-purpose.md): 인증은 허용 목록(모양 맞는 12자 코드 + 상태 정확히 "사용"),
 // 이름·권한은 서버만 정함, 같은 요청을 두 번 받아도 결과가 같음, 모든 칸은 텍스트 서식(@) + 앞글자 막기.
@@ -161,7 +160,9 @@ function setupSheets() {
     else if (cur.join("\u0001") !== head.join("\u0001")) throw new Error("'" + name + "' 시트 첫 줄이 정해진 머리줄과 다릅니다 — 새 시트에서 다시 하세요");
     sh.setFrozenRows(1);
   });
-  statusRule_();
+  statusRule_(ss);
+  // 웹 앱·트리거가 열 시트는 모든 준비가 끝난 뒤에만 적는다(중간에 멈추면 기존 연결 그대로, 다른 속성은 지우지 않음)
+  PropertiesService.getScriptProperties().setProperties({ sheetId: ss.getId(), sheetScript: ScriptApp.getScriptId() });
   Logger.log("시트 준비를 마쳤습니다");
 }
 
@@ -337,8 +338,19 @@ function out_(o) { return ContentService.createTextOutput(JSON.stringify(o)).set
 
 function bad_(msg) { return { ok: false, error: "bad", message: msg }; }
 
+// 웹 앱·트리거에서는 getActive를 쓸 수 없다고 보고 쓰지 않는다 — setupSheets가 적어 둔 시트를 ID로 연다
+function ss_() {
+  var p = PropertiesService.getScriptProperties(), id = p.getProperty("sheetId");
+  if (!id || p.getProperty("sheetScript") !== ScriptApp.getScriptId()) throw new Error("시트 연결이 없습니다 — 편집기에서 setupSheets를 실행하세요");
+  try {
+    return SpreadsheetApp.openById(id);
+  } catch (e) {
+    throw new Error("시트를 열지 못했습니다 — 편집기에서 setupSheets를 다시 실행하세요");
+  }
+}
+
 function sheet_(name) {
-  var sh = SpreadsheetApp.getActive().getSheetByName(name);
+  var sh = ss_().getSheetByName(name);
   if (!sh) throw new Error("시트가 없습니다: " + name);
   return sh;
 }
@@ -392,8 +404,8 @@ function locked_(fn) {
   }
 }
 
-function statusRule_() {
-  var sh = sheet_("사감");
+function statusRule_(ss) {
+  var sh = ss ? ss.getSheetByName("사감") : sheet_("사감");
   ensureRows_(sh, 2);
   var rule = SpreadsheetApp.newDataValidation().requireValueInList(["사용", "중지"], true).setAllowInvalid(false).build();
   sh.getRange(2, 4, sh.getMaxRows() - 1, 1).setDataValidation(rule);
