@@ -357,6 +357,7 @@
   .daily-sum{background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:13px;margin-bottom:6px;}
   .daily-sum .dl{display:flex;justify-content:space-between;gap:6px;padding:3px 0;border-bottom:1px dotted var(--line);}
   .daily-sum .dl:last-child{border-bottom:none;}
+  .dl-ed{background:none;border:none;font-size:17px;cursor:pointer;padding:0 2px 0 8px;}
 
   .data-btn{width:100%;height:50px;border-radius:12px;border:1.5px solid var(--line);background:#fff;
     font-size:15px;font-weight:700;color:var(--ink);cursor:pointer;display:flex;align-items:center;gap:10px;padding:0 14px;margin-bottom:8px;}
@@ -813,6 +814,26 @@
       </div>
       <div class="hint" id="day-sum"></div>
       <div id="day-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 상벌점 기록 수정 (당일 상벌점에서 ✏️) -->
+<div class="ov" id="ov-demedit">
+  <div class="modal">
+    <div class="m-head"><h3>✏️ 상벌점 수정</h3><button class="x" onclick="closeOv('ov-demedit')">✕</button></div>
+    <div class="m-body">
+      <div class="hint" id="de-who"></div>
+      <div class="field" style="margin-top:8px"><label>상벌점 항목</label><select id="de-select"></select></div>
+      <div class="field"><label>사유 / 상세 (선택)</label><textarea id="de-reason" placeholder="발생 경위를 기록하세요"></textarea></div>
+      <div class="row2" style="margin-bottom:6px">
+        <div class="field" style="margin:0"><label>발생일</label><input type="date" id="de-date"></div>
+        <div class="field" style="margin:0"><label>작성자</label><input id="de-by" placeholder="담당 사감"></div>
+      </div>
+    </div>
+    <div class="m-foot">
+      <button class="btn btn-s" onclick="closeOv('ov-demedit')">취소</button>
+      <button class="btn btn-g" onclick="saveDemEdit()">✅ 수정 저장</button>
     </div>
   </div>
 </div>
@@ -1668,13 +1689,47 @@ function renderDay(){
   box.innerHTML=haks.map(hak=>{
     const st=byHak[hak]||{name:"?",grade:0,room:""};
     const items=byStu[hak]; let net=0; items.forEach(r=>net+=(r.type==="merit"?+r.pt:-(+r.pt)));
-    const lines=items.map(r=>`<div class="dl"><span><span class="ltag ${r.type==="merit"?"lt-mer":"lt-dem"}">${r.type==="merit"?"상점":"벌점"}</span> ${esc(r.name)}${r.reason?` <span style="color:var(--sub);font-size:12px">· ${esc(r.reason)}</span>`:""}${r.by?` <span style="color:var(--sub);font-size:11px">(${esc(r.by)})</span>`:""}</span><span style="font-weight:800;color:${r.type==="merit"?"var(--green)":"var(--red)"}">${r.type==="merit"?"+":"-"}${r.pt}</span></div>`).join("");
+    const lines=items.map(r=>`<div class="dl"><span><span class="ltag ${r.type==="merit"?"lt-mer":"lt-dem"}">${r.type==="merit"?"상점":"벌점"}</span> ${esc(r.name)}${r.reason?` <span style="color:var(--sub);font-size:12px">· ${esc(r.reason)}</span>`:""}${r.by?` <span style="color:var(--sub);font-size:11px">(${esc(r.by)})</span>`:""}</span><span style="white-space:nowrap"><span style="font-weight:800;color:${r.type==="merit"?"var(--green)":"var(--red)"}">${r.type==="merit"?"+":"-"}${r.pt}</span><button class="dl-ed" data-id="${esc(r.id)}" onclick="openDemEdit(this.dataset.id)" aria-label="수정">✏️</button></span></div>`).join("");
     return `<div class="log-item">
       <div class="top"><span><b style="font-size:16px;cursor:pointer" onclick="closeOv('ov-day');openStu('${hak}')">${esc(st.name)}</b>
         <span style="color:var(--sub);font-size:13px">${esc(hak)}${st.grade?" · "+st.grade+"학년":""}${st.room?" · "+esc(st.room)+"호":""}</span></span>
       <span style="font-weight:800;color:${net>=0?"var(--green)":"var(--red)"}">일계 ${net>0?"+":""}${net}</span></div>
       <div class="daily-sum" style="margin-top:4px">${lines}</div></div>`;
   }).join("");
+}
+/* 당일 상벌점에서 기록 고치기 — 같은 기록(id·입력 시각 ts)은 그대로 두고 항목·사유·발생일·작성자만 바꾼다 */
+let demEditId=null,demEditCats=null;
+function openDemEdit(id){
+  const r=DB.demerits.find(x=>x.id===id); if(!r)return;
+  demEditId=id;
+  const st=byHak[r.hak]||{name:"?"};
+  document.getElementById("de-who").textContent=`${st.name} (${r.hak})`;
+  // 열 때의 항목 목록을 복사해 둔다 — 창이 열린 동안 항목 편집으로 목록이 바뀌어도 저장은 화면에 보인 선택지(이름·점수) 그대로
+  const cp=a=>(a||[]).map(c=>({g:c.g,name:c.name,pt:c.pt}));
+  demEditCats={demerit:cp(DB.cats.demerit),merit:cp(DB.cats.merit)};
+  // 지금 항목 목록에서 같은 항목을 찾고, 없으면(그 뒤 목록이 바뀜) 그때 이름·점수를 "그대로"로 맨 위에 둔다
+  const cats=demEditCats[r.type]||[];
+  const i=cats.findIndex(c=>c.g===r.g&&c.name===r.name&&+c.pt===+r.pt);
+  const sel=document.getElementById("de-select");
+  sel.innerHTML=(i<0?`<option value="keep">${esc(r.name)} (${r.type==="merit"?"+":"-"}${esc(r.pt)}) — 그대로</option>`:"")+catOptionsHTML();
+  sel.value=i<0?"keep":`${r.type}:${i}`;
+  document.getElementById("de-reason").value=r.reason||"";
+  document.getElementById("de-date").value=r.date||"";
+  document.getElementById("de-by").value=r.by||"";
+  showOv("ov-demedit");
+}
+function saveDemEdit(){
+  const r=DB.demerits.find(x=>x.id===demEditId); if(!r){closeOv("ov-demedit");return;}
+  const next={reason:document.getElementById("de-reason").value.trim(),
+    date:document.getElementById("de-date").value||r.date,by:document.getElementById("de-by").value.trim()};
+  const v=document.getElementById("de-select").value;
+  if(v!=="keep"){const [t,i]=v.split(":");const c=((demEditCats||{})[t]||[])[+i]; if(!c){toast("항목을 선택하세요");return;}
+    Object.assign(next,{type:t,g:c.g,name:c.name,pt:c.pt});}
+  const old={...r}; Object.assign(r,next);
+  if(!save()){Object.keys(next).forEach(k=>{if(k in old)r[k]=old[k];else delete r[k];});return;}  // 저장 못 하면 화면도 고치기 전으로
+  demEditId=null; demEditCats=null; closeOv("ov-demedit");
+  renderDay(); render(); if(curStu&&curStu.hak===r.hak){renderScore();renderDemList();}
+  toast("상벌점 기록 수정됨");
 }
 
 /* ===== 설정·데이터 ===== */
